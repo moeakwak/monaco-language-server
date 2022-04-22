@@ -1,5 +1,6 @@
 import logging
-import os.path
+import os
+import re
 import subprocess
 import threading
 import argparse
@@ -19,13 +20,19 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("log/{}.log".format(
+        logging.FileHandler("{}.log".format(
             datetime.now().strftime("%Y%m%d-%H%M%S"))),
         logging.StreamHandler()
     ]
 )
 
 log = logging.getLogger(__name__)
+
+
+class JsonRpcStreamLogWriter(streams.JsonRpcStreamWriter):
+    def write(self, ip, message):
+        log.info("({}) < {}".format(ip, str(message)))
+        return super().write(message)
 
 
 class HomeRequestHandler(web.RequestHandler):
@@ -102,7 +109,7 @@ class LanguageServerWebSocketHandler(websocket.WebSocketHandler):
             self.commands[self.lang], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
         # Create a writer that formats json messages with the correct LSP headers
-        self.writer = streams.JsonRpcStreamWriter(proc.stdin)
+        self.writer = JsonRpcStreamLogWriter(proc.stdin)
 
         # Create a reader for consuming stdout of the language server. We need to
         # consume this in another thread
@@ -118,15 +125,20 @@ class LanguageServerWebSocketHandler(websocket.WebSocketHandler):
 
     def on_message(self, message):
         """Forward client->server messages to the endpoint."""
-        temp = json.loads(message)
-        print(temp)
-        uri = temp['params']['textDocument']['uri']
-        if not self.uri and uri:
-            self.uri = uri
-        self.writer.write(temp)
+        message = json.loads(message)
+        # fix "invalid params of textDocument/codeAction: expected int" problem in ccls
+        try:
+            for each in message["params"]['context']['diagnostics']:
+                if "code" in each:
+                    each["code"] = int(each["code"])
+        except KeyError:
+            pass
+        ip = self.request.remote_ip
+        log.info("({}) > {}".format(ip, str(message)))
+        self.writer.write(ip, message)
 
-    def on_close(self):
-        pass
+    # def on_close(self):
+    #     pass
 
     def check_origin(self, origin):
         return True
@@ -158,6 +170,11 @@ if __name__ == "__main__":
 
     print("use config: {}\ncurrent workspace_dir_path: {}\n".format(
         config_path, workspace_dir_path))
+
+    if "clean_files_on_start" in config and config["clean_files_on_start"]:
+        for f in os.listdir(workspace_dir_path):
+            if re.search(r".*\.cpp", f):
+                os.remove(os.path.join(workspace_dir_path, f))
 
     app = web.Application([
         (r"/", HomeRequestHandler, dict(commands=config['commands'])),
