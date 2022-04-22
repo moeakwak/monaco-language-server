@@ -4,6 +4,7 @@ import subprocess
 import threading
 import argparse
 import yaml
+from datetime import datetime
 
 from tornado import ioloop, process, web, websocket, httputil
 
@@ -14,8 +15,18 @@ try:
 except Exception:  # pylint: disable=broad-except
     import json
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("log/{}.log".format(
+            datetime.now().strftime("%Y%m%d-%H%M%S"))),
+        logging.StreamHandler()
+    ]
+)
+
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
+
 
 class HomeRequestHandler(web.RequestHandler):
     commands = None
@@ -47,19 +58,23 @@ class FileServerWebSocketHandler(websocket.WebSocketHandler):
     def on_message(self, message):
         message = json.loads(message)
         if message['type'] == 'get_workspace_dir_path':
-            self.write_message(json.dumps({'result': 'ok', 'data': workspace_dir_path}))
+            self.write_message(json.dumps(
+                {'result': 'ok', 'data': workspace_dir_path}))
         elif message['type'] == 'update':
             if 'filename' not in message or 'code' not in message:
-                self.write_message(json.dumps({'result': 'error', 'description': 'no filename or code'}))
+                self.write_message(json.dumps(
+                    {'result': 'error', 'description': 'no filename or code'}))
             else:
                 filename = message['filename']
                 code = message['code']
                 with open(os.path.join(workspace_dir_path, filename), 'w') as f:
                     f.write(code)
-                log.info("update file {} with {} characters".format(filename, len(code)))
+                log.info("update file {} with {} characters".format(
+                    filename, len(code)))
                 self.write_message(json.dumps({'result': 'ok'}))
         else:
-            self.write_message(json.dumps({'result': 'error', 'description': 'no such type'}))
+            self.write_message(json.dumps(
+                {'result': 'error', 'description': 'no such type'}))
 
     def check_origin(self, origin):
         return True
@@ -141,11 +156,13 @@ if __name__ == "__main__":
     if not os.path.exists(workspace_dir_path):
         os.makedirs(workspace_dir_path)
 
-    print("use config: {}\ncurrent workspace_dir_path: {}\n".format(config_path, workspace_dir_path))
+    print("use config: {}\ncurrent workspace_dir_path: {}\n".format(
+        config_path, workspace_dir_path))
 
     app = web.Application([
         (r"/", HomeRequestHandler, dict(commands=config['commands'])),
-        (r"/file", FileServerWebSocketHandler, dict(workspace_dir_path=workspace_dir_path)),
+        (r"/file", FileServerWebSocketHandler,
+         dict(workspace_dir_path=workspace_dir_path)),
         (r"/(.*)", LanguageServerWebSocketHandler,
          dict(commands=config['commands']))
     ])
@@ -156,6 +173,6 @@ if __name__ == "__main__":
     print("\nStarted Web Socket at:\n" + "\n".join(
         ["  - {}: ws://{}:{}/{}".format(lang, config['host'],
                                         config['port'], lang) for lang in config['commands'].keys()])
-          )
+    )
     app.listen(config['port'], address=config['host'])
     ioloop.IOLoop.current().start()

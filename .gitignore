@@ -1,6 +1,6 @@
 .idea
 .vscode
-*.yaml
 *workspace*
 *.pyc
 __pycache__
+*.log
