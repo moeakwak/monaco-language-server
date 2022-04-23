@@ -71,6 +71,12 @@ Some website do not accept http websocket, so you need a SSL certificate. You ma
 
 To configure formatting in `ccls`, just set `.clang-format` in `app/cpp_workspace`.
 
+```
+BasedOnStyle: Google
+IndentWidth: 4
+SortIncludes: false
+```
+
 ## Node.js Client
 
 Use `monaco-languageclient` and `@codingame/monaco-jsonrpc`.

@@ -239,7 +239,7 @@ if __name__ == "__main__":
     if "clean_files_on_start" in config and config["clean_files_on_start"]:
         for f in os.listdir(rootUri):
             p = os.path.join(rootUri, f)
-            if os.path.isfile(p) and re.search(r"\.(cpp|js|py|go|txt|c|java)", f):
+            if os.path.isfile(p) and re.match(r"(.+)\.(cpp|js|py|go|txt|c|java)", f):
                 os.remove(p)
 
     server.listen(config['port'], address=config['host'])
