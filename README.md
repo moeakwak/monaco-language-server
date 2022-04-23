@@ -6,12 +6,13 @@ Supports:
 - python (pyls)
 - c++ (ccls or clangd)
 
-## Usage
+## Usage (Ubuntu as server)
 
 First, Install `ccls` (or `clangd`) and confirm `ccls --version` has output.
 
 ```
 sudo apt-get -y ccls
+sudo apt-get -y clang-format
 ```
 
 Then install requirements:
@@ -20,10 +21,11 @@ Then install requirements:
 pip3 install -r requirements.txt
 ```
 
-Edit configuration `app/config.yaml` if needed.
+Edit configuration `app/config.yml` if needed. You can use templates.
 
 ```yaml
-host: 0.0.0.0
+debug: yes
+host: 127.0.0.1
 port: 3000      # change the port if in use
 # ...
 ```
@@ -44,22 +46,24 @@ use config: app/config.yaml
 current rootUri: app/cpp_workspace
 
 all commands:
-- python: pyls -v
-- cpp: ccls --init={
-    "capabilities": {
-    "foldingRangeProvider":false
-    },
+  - python: pyls -v
+  - cpp: ccls --init={
     "index":{
-    "onChange":true,
-    "trackDependency":2
+      "onChange":true,
+      "trackDependency":2
     }
-}
+  }
 
 
 Started Web Socket at:
-- python: ws://0.0.0.0:3000/python
-- cpp: ws://0.0.0.0:3000/cpp
+  - python: ws://127.0.0.1:3000/python
+  - cpp: ws://127.0.0.1:3000/cpp
+Visit http://127.0.0.1:3000/log to see log.
 ```
+
+## Use SSL Connection
+
+Some website do not accept http websocket, so you need a SSL certificate. You may **generate a self-signed certificate for 127.0.0.1**, put the cert and key files in `./ssl`, and install it as a trusted root certificate, then turn on ssl in `config.yml`.
 
 ## Configuration
 
@@ -67,7 +71,7 @@ Started Web Socket at:
 
 To configure formatting in `ccls`, just set `.clang-format` in `app/cpp_workspace`.
 
-## Client
+## Node.js Client
 
 Use `monaco-languageclient` and `@codingame/monaco-jsonrpc`.
 
@@ -127,12 +131,11 @@ monaco_model.onDidChangeContent((e) => {
 function updateFile(filename, code) {
   let url = "ws://" + serverHost + "/file";
   if (!!fileWebSocket && fileWebSocket.readyState == fileWebSocket.OPEN) {
-    // reuse opening fileWebSocket
     fileWebSocket.send(JSON.stringify({ type: "update", filename, code }));
   } else {
     fileWebSocket = new WebSocket(url);
     fileWebSocket.onopen = (ev) => {
-      fileWebSocket.send(JSON.stringify({ type: "update", filename, code }));
+      ev.target.send(JSON.stringify({ type: "update", filename, code }));
     };
     fileWebSocket.onmessage = (ev) => {
       let message = JSON.parse(ev.data);

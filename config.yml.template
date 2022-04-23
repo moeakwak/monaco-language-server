@@ -1,0 +1,27 @@
+debug: yes
+
+host: 127.0.0.1
+port: 3000
+
+# uncomment if use SSL
+# ssl:
+#   crt: ../ssl/server.crt
+#   key: ../ssl/server.key
+
+clean_files_on_start: false
+
+commands:
+  python:
+    - pyls
+    - -v
+  cpp:
+    - ccls
+    - >
+      --init={
+          "index":{
+            "onChange":true,
+            "trackDependency":2
+          }
+        }
+  # cpp:
+  #   - clangd

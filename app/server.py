@@ -38,6 +38,28 @@ class JsonRpcStreamLogWriter(streams.JsonRpcStreamWriter):
         return super().write(message)
 
 
+class LogRequestHandler(web.RequestHandler):
+    debug = False
+
+    def initialize(self, debug) -> None:
+        self.debug = debug
+
+    def get(self):
+        if self.debug:
+            content = ""
+            with open("server.log", "r") as f:
+                if f:
+                    content = """
+                    <textarea style="width: 100%; height: 100%;">{}</textarea>
+                    """.format(f.read())
+                else:
+                    content = "Cannot read server log"
+            self.finish(content)
+        else:
+            self.set_status(400, "debug is off")
+            self.finish()
+
+
 class HomeRequestHandler(web.RequestHandler):
     commands = None
 
@@ -175,13 +197,13 @@ if __name__ == "__main__":
     print("use config: {}\ncurrent rootUri: {}\n".format(
         config_path, rootUri))
 
-    if "clean_files_on_start" in config and config["clean_files_on_start"]:
-        for f in os.listdir(rootUri):
-            if re.search(r".*\.(cpp|js|py|go|txt|c|java)", f):
-                os.remove(os.path.join(rootUri, f))
+    debug = False
+    if "debug" in config:
+        debug = config["debug"]
 
     app = web.Application([
         (r"/", HomeRequestHandler, dict(commands=config['commands'])),
+        (r"/log", LogRequestHandler, dict(debug=debug)),
         (r"/file", FileServerWebSocketHandler,
          dict(rootUri=rootUri)),
         (r"/(.*)", LanguageServerWebSocketHandler,
@@ -189,7 +211,7 @@ if __name__ == "__main__":
     ])
 
     # ssl config
-    if "ssl" in config and config["ssl"]["enabled"]:
+    if "ssl" in config and os.path.exists(os.path.join(file_dir_path, config["ssl"]["crt"])) and os.path.exists(os.path.join(file_dir_path, config["ssl"]["key"])):
         ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
         ssl_ctx.load_cert_chain(os.path.join(file_dir_path, config["ssl"]["crt"]),
                                 os.path.join(file_dir_path, config["ssl"]["key"]))
@@ -197,15 +219,27 @@ if __name__ == "__main__":
         enable_ssl = True
     else:
         server = httpserver.HTTPServer(app)
-        enable_ssl = True
+        enable_ssl = False
 
     print("all commands:\n" + "\n".join(
         ["  - {}: {}".format(lang, " ".join(config['commands'][lang]))
          for lang in config['commands'].keys()]
     ))
     print("\nStarted Web Socket at:\n" + "\n".join(
-        ["  - {}: {}://{}:{}/{}".format(lang, "wss" if enable_ssl else "ws" , config['host'],
+        ["  - {}: {}://{}:{}/{}".format(lang, "wss" if enable_ssl else "ws", config['host'],
                                         config['port'], lang) for lang in config['commands'].keys()])
     )
+
+    if debug:
+        print("Visit {}://{}:{}/log to see log.".format("https" if enable_ssl else "http", config['host'],
+                                                        config['port']))
+    else:
+        print("Option debug is off.")
+        
+    if "clean_files_on_start" in config and config["clean_files_on_start"]:
+        for f in os.listdir(rootUri):
+            if re.search(r".*\.(cpp|js|py|go|txt|c|java)", f):
+                os.remove(os.path.join(rootUri, f))
+
     server.listen(config['port'], address=config['host'])
     ioloop.IOLoop.current().start()
