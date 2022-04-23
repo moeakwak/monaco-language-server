@@ -1,6 +1,12 @@
 .idea
 .vscode
-*workspace*
+cpp_workspace
 *.pyc
 __pycache__
 *.log
+*.crt
+*.pem
+*.key
+ssl
+req.cnf
+req.sh

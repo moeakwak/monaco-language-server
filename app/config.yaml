@@ -1,11 +1,10 @@
 host: 0.0.0.0
 port: 3000
 
-# not implemented yet
-# ssl:
-#   enable: false
-#   crtpath: ssl/server.crt
-#   keypath: ssl/server.key
+ssl:
+  enabled: no
+  crt: ssl/server.crt
+  key: ssl/server.key
 
 clean_files_on_start: false
 

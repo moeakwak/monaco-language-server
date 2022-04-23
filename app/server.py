@@ -1,13 +1,14 @@
 import logging
 import os
 import re
+import ssl
 import subprocess
 import threading
 import argparse
 import yaml
 from datetime import datetime
 
-from tornado import ioloop, process, web, websocket, httputil
+from tornado import ioloop, process, web, websocket, httpserver
 
 from pylsp_jsonrpc import streams
 
@@ -20,13 +21,15 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("{}.log".format(
+        logging.FileHandler("log/{}.log".format(
             datetime.now().strftime("%Y%m%d-%H%M%S"))),
         logging.StreamHandler()
     ]
 )
 
 log = logging.getLogger(__name__)
+
+enable_ssl = False
 
 
 class JsonRpcStreamLogWriter(streams.JsonRpcStreamWriter):
@@ -45,28 +48,28 @@ class HomeRequestHandler(web.RequestHandler):
         self.write("""
         <h1>Language Server</h1>
         <h2>Support Languages</h2>
-        {}
+        <p>{}</p>
         <h2>Usage</h2>
-        Use WebSocket connect wss://localhost/<language_name>, e.g. wss ://localhost/python .
-        """.format("".join(
-            ["<p>{}</p>".format(lang) for lang in self.commands.keys()]
-        )))
+        Use WebSocket connect {}://localhost/<language_name>
+        """.format(" ".join(
+            [lang for lang in self.commands.keys()]
+        ), "wss" if enable_ssl else "ws"))
 
 
 class FileServerWebSocketHandler(websocket.WebSocketHandler):
-    workspace_dir_path = None
+    rootUri = None
 
-    def initialize(self, workspace_dir_path) -> None:
-        self.workspace_dir_path = workspace_dir_path
+    def initialize(self, rootUri) -> None:
+        self.rootUri = rootUri
 
     def open(self, *args, **kwargs):
         log.info("new FileServerWebSocketHandler request")
 
     def on_message(self, message):
         message = json.loads(message)
-        if message['type'] == 'get_workspace_dir_path':
+        if message['type'] == 'get_rootUri':
             self.write_message(json.dumps(
-                {'result': 'ok', 'data': workspace_dir_path}))
+                {'result': 'ok', 'data': rootUri}))
         elif message['type'] == 'update':
             if 'filename' not in message or 'code' not in message:
                 self.write_message(json.dumps(
@@ -74,7 +77,7 @@ class FileServerWebSocketHandler(websocket.WebSocketHandler):
             else:
                 filename = message['filename']
                 code = message['code']
-                with open(os.path.join(workspace_dir_path, filename), 'w') as f:
+                with open(os.path.join(rootUri, filename), 'w') as f:
                     f.write(code)
                 log.info("update file {} with {} characters".format(
                     filename, len(code)))
@@ -129,7 +132,7 @@ class LanguageServerWebSocketHandler(websocket.WebSocketHandler):
         # fix "invalid params of textDocument/codeAction: expected int" problem in ccls
         try:
             for each in message["params"]['context']['diagnostics']:
-                if "code" in each:
+                if "code" in each and str.isnumeric(each["code"]):
                     each["code"] = int(each["code"])
         except KeyError:
             pass
@@ -152,8 +155,9 @@ if __name__ == "__main__":
                         default="config.yaml", help="yaml configuration")
     args = parser.parse_args()
 
-    config_path = os.path.join(os.path.dirname(
-        os.path.abspath(__file__)), args.config)
+    file_dir_path = os.path.dirname(os.path.abspath(__file__))
+
+    config_path = os.path.join(file_dir_path, args.config)
 
     if not os.path.isfile(config_path):
         log.error("config file {} not exits!".format(config_path))
@@ -163,33 +167,45 @@ if __name__ == "__main__":
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
 
-    workspace_dir_path = os.path.join(os.path.dirname(
+    rootUri = os.path.join(os.path.dirname(
         os.path.abspath(__file__)), "cpp_workspace")
-    if not os.path.exists(workspace_dir_path):
-        os.makedirs(workspace_dir_path)
+    if not os.path.exists(rootUri):
+        os.makedirs(rootUri)
 
-    print("use config: {}\ncurrent workspace_dir_path: {}\n".format(
-        config_path, workspace_dir_path))
+    print("use config: {}\ncurrent rootUri: {}\n".format(
+        config_path, rootUri))
 
     if "clean_files_on_start" in config and config["clean_files_on_start"]:
-        for f in os.listdir(workspace_dir_path):
+        for f in os.listdir(rootUri):
             if re.search(r".*\.cpp", f):
-                os.remove(os.path.join(workspace_dir_path, f))
+                os.remove(os.path.join(rootUri, f))
 
     app = web.Application([
         (r"/", HomeRequestHandler, dict(commands=config['commands'])),
         (r"/file", FileServerWebSocketHandler,
-         dict(workspace_dir_path=workspace_dir_path)),
+         dict(rootUri=rootUri)),
         (r"/(.*)", LanguageServerWebSocketHandler,
          dict(commands=config['commands']))
     ])
+
+    # ssl config
+    if "ssl" in config and config["ssl"]["enabled"]:
+        ssl_ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ssl_ctx.load_cert_chain(os.path.join(file_dir_path, config["ssl"]["crt"]),
+                                os.path.join(file_dir_path, config["ssl"]["key"]))
+        server = httpserver.HTTPServer(app, ssl_options=ssl_ctx)
+        enable_ssl = True
+    else:
+        server = httpserver.HTTPServer(app)
+        enable_ssl = True
+
     print("all commands:\n" + "\n".join(
         ["  - {}: {}".format(lang, " ".join(config['commands'][lang]))
          for lang in config['commands'].keys()]
     ))
     print("\nStarted Web Socket at:\n" + "\n".join(
-        ["  - {}: ws://{}:{}/{}".format(lang, config['host'],
+        ["  - {}: {}://{}:{}/{}".format(lang, "wss" if enable_ssl else "ws" , config['host'],
                                         config['port'], lang) for lang in config['commands'].keys()])
     )
-    app.listen(config['port'], address=config['host'])
+    server.listen(config['port'], address=config['host'])
     ioloop.IOLoop.current().start()
