@@ -235,11 +235,12 @@ if __name__ == "__main__":
                                                         config['port']))
     else:
         print("Option debug is off.")
-        
+
     if "clean_files_on_start" in config and config["clean_files_on_start"]:
         for f in os.listdir(rootUri):
-            if re.search(r".*\.(cpp|js|py|go|txt|c|java)", f):
-                os.remove(os.path.join(rootUri, f))
+            p = os.path.join(rootUri, f)
+            if os.path.isfile(p) and re.search(r"\.(cpp|js|py|go|txt|c|java)", f):
+                os.remove(p)
 
     server.listen(config['port'], address=config['host'])
     ioloop.IOLoop.current().start()
