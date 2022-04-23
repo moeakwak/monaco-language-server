@@ -21,7 +21,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("log/{}.log".format(
+        logging.FileHandler("server.log".format(
             datetime.now().strftime("%Y%m%d-%H%M%S"))),
         logging.StreamHandler()
     ]
@@ -152,7 +152,7 @@ if __name__ == "__main__":
     print("*" * (len(welcome)) + "\n" + welcome + "\n" + "*" * (len(welcome)))
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", type=str,
-                        default="config.yaml", help="yaml configuration")
+                        default="config.yml", help="yaml configuration")
     args = parser.parse_args()
 
     file_dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -177,7 +177,7 @@ if __name__ == "__main__":
 
     if "clean_files_on_start" in config and config["clean_files_on_start"]:
         for f in os.listdir(rootUri):
-            if re.search(r".*\.cpp", f):
+            if re.search(r".*\.(cpp|js|py|go|txt|c|java)", f):
                 os.remove(os.path.join(rootUri, f))
 
     app = web.Application([
