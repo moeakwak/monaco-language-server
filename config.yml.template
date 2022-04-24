@@ -12,6 +12,8 @@ clean_files_on_start: false
 
 commands:
   python:
+    - python3
+    - -m
     - pyls
     - -v
   cpp:

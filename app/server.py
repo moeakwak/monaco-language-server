@@ -17,12 +17,14 @@ try:
 except Exception:  # pylint: disable=broad-except
     import json
 
+fileHandler = logging.FileHandler("server.log")
+fileHandler.setLevel(logging.WARN)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("server.log".format(
-            datetime.now().strftime("%Y%m%d-%H%M%S"))),
+        fileHandler,
         logging.StreamHandler()
     ]
 )
