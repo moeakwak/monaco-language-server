@@ -70,11 +70,11 @@ class HomeRequestHandler(web.RequestHandler):
 
     def get(self):
         self.write("""
-        <h1>Language Server</h1>
+        <h1>Language Server is running!</h1>
         <h2>Support Languages</h2>
         <p>{}</p>
         <h2>Usage</h2>
-        Use WebSocket connect {}://localhost/<language_name>
+        Use WebSocket connect {}://<host>:<port>/<language_name>
         """.format(" ".join(
             [lang for lang in self.commands.keys()]
         ), "wss" if enable_ssl else "ws"))
@@ -244,5 +244,5 @@ if __name__ == "__main__":
             if os.path.isfile(p) and re.match(r"(.+)\.(cpp|js|py|go|txt|c|java)", f):
                 os.remove(p)
 
-    server.listen(config['port'], address=config['host'])
+    server.listen(config['port'])
     ioloop.IOLoop.current().start()
