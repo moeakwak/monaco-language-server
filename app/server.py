@@ -42,12 +42,18 @@ class JsonRpcStreamLogWriter(streams.JsonRpcStreamWriter):
 
 class LogRequestHandler(web.RequestHandler):
     debug = False
+    passwd = None
 
-    def initialize(self, debug) -> None:
+    def initialize(self, debug, passwd=passwd) -> None:
         self.debug = debug
+        self.passwd = passwd
 
     def get(self):
         if self.debug:
+            if self.get_argument("passwd") != self.passwd:
+                self.set_status(400)
+                self.finish()
+                return
             content = ""
             with open("server.log", "r") as f:
                 if f:
@@ -200,12 +206,18 @@ if __name__ == "__main__":
         config_path, rootUri))
 
     debug = False
-    if "debug" in config:
-        debug = config["debug"]
+    passwd = None
+    if "debug" in config and config["debug"]["enable"]:
+        debug = True
+        if "passwd" in config["debug"]:
+            passwd = config["debug"]["passwd"]
+            if len(passwd) <= 4:
+                print("invalid password for log")
+                exit(1)
 
     app = web.Application([
         (r"/", HomeRequestHandler, dict(commands=config['commands'])),
-        (r"/log", LogRequestHandler, dict(debug=debug)),
+        (r"/log", LogRequestHandler, dict(debug=debug, passwd=passwd)),
         (r"/file", FileServerWebSocketHandler,
          dict(rootUri=rootUri)),
         (r"/(.*)", LanguageServerWebSocketHandler,
