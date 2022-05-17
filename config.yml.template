@@ -22,7 +22,16 @@ commands:
       --init={
           "index":{
             "onChange":true,
-            "trackDependency":2
+            "trackDependency":0,
+            "threads":2,
+            "comments":0,
+            "initialBlacklist": ["."]
+          },
+          "cache":{
+            "retainInMemory":0
+          },
+          "diagnostics":{
+            "onSave":1500
           }
         }
   # cpp:
