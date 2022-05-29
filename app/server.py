@@ -125,6 +125,7 @@ class LanguageServerWebSocketHandler(websocket.WebSocketHandler):
     lang = None
     commands = None
     uri = None
+    proc = None
 
     def initialize(self, commands) -> None:
         self.commands = commands
@@ -138,18 +139,18 @@ class LanguageServerWebSocketHandler(websocket.WebSocketHandler):
         log.info("Spawning {} subprocess".format(self.lang))
 
         # Create an instance of the language server
-        proc = process.Subprocess(
+        self.proc = process.Subprocess(
             self.commands[self.lang], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-
+        
         # Create a writer that formats json messages with the correct LSP headers
-        self.writer = JsonRpcStreamLogWriter(proc.stdin)
+        self.writer = JsonRpcStreamLogWriter(self.proc.stdin)
 
         # Create a reader for consuming stdout of the language server. We need to
         # consume this in another thread
         def consume():
             # Start a tornado IOLoop for reading/writing to the process in this thread
             ioloop.IOLoop()
-            reader = streams.JsonRpcStreamReader(proc.stdout)
+            reader = streams.JsonRpcStreamReader(self.proc.stdout)
             reader.listen(lambda msg: self.write_message(json.dumps(msg)))
 
         thread = threading.Thread(target=consume)
@@ -170,8 +171,9 @@ class LanguageServerWebSocketHandler(websocket.WebSocketHandler):
         log.info("({}) > {}".format(ip, str(message)))
         self.writer.write(ip, message)
 
-    # def on_close(self):
-    #     pass
+    def on_close(self):
+        log.info("client closed")
+        self.proc.proc.terminate()
 
     def check_origin(self, origin):
         return True
